@@ -1,0 +1,76 @@
+diff --git a/src/widgets/capture/capturewidget.cpp b/src/widgets/capture/capturewidget.cpp
+index 25a887a..6952933 100644
+--- a/src/widgets/capture/capturewidget.cpp
++++ b/src/widgets/capture/capturewidget.cpp
+@@ -113,21 +113,15 @@ CaptureWidget::CaptureWidget(const CaptureRequest& req,
+ #endif
+     if (fullScreen) {
+         bool ok = true;
+-        int preSelectedMonitor;
+-        if (req.hasSelectedMonitor()) {
+-            preSelectedMonitor = req.selectedMonitor();
+-        } else {
+-            preSelectedMonitor = -1;
+-        }
+-        m_context.screenshot =
+-          grabber.grabEntireDesktop(ok, preSelectedMonitor);
++        // Capture the full desktop (all monitors) without monitor selection.
++        // This allows cross-monitor selection when running under XWayland.
++        m_context.screenshot = grabber.grabFullDesktop(ok);
+         if (!ok) {
+-            // Error already logged in ScreenGrabber
+             this->close();
+         }
+         m_context.origScreenshot = m_context.screenshot;
+ 
+-        selectedScreen = grabber.getSelectedScreen();
++        selectedScreen = nullptr;
+ 
+ #if defined(Q_OS_WIN)
+ #if !defined(FLAMESHOT_DEBUG_CAPTURE)
+@@ -187,33 +181,25 @@ CaptureWidget::CaptureWidget(const CaptureRequest& req,
+         }
+ #endif
+ 
+-        // Always display on the selected screen (not spanning entire desktop)
+-        if (selectedScreen == nullptr) {
+-            selectedScreen = QGuiApplication::primaryScreen();
+-        }
+-        QRect screenGeom = selectedScreen->geometry();
+-        move(screenGeom.topLeft());
+-        resize(screenGeom.size());
+-
+-        if (selectedScreen != nullptr && windowHandle()) {
+-            windowHandle()->setScreen(selectedScreen);
++        // Span the entire desktop (all monitors) for cross-monitor selection
++        QRect totalGeom;
++        for (QScreen* const screen : QGuiApplication::screens()) {
++            totalGeom = totalGeom.united(screen->geometry());
+         }
++        move(totalGeom.topLeft());
++        resize(totalGeom.size());
+ #endif
+     }
+ 
+     QVector<QRect> areas;
+     if (m_context.fullscreen) {
+-        // Always display on a single screen, normalized to (0, 0)
+-        QScreen* screenForAreas = selectedScreen;
+-        if (!screenForAreas) {
+-            screenForAreas = QGuiAppCurrentScreen().currentScreen();
+-        }
+-        if (!screenForAreas) {
+-            screenForAreas = QGuiApplication::primaryScreen();
++        // Use the full desktop rect so selection spans all monitors
++        QRect totalArea;
++        for (QScreen* const screen : QGuiApplication::screens()) {
++            totalArea = totalArea.united(screen->geometry());
+         }
+-        QRect r = screenForAreas ? screenForAreas->geometry() : QRect();
+-        r.moveTo(0, 0);
+-        areas.append(r);
++        totalArea.moveTo(0, 0);
++        areas.append(totalArea);
+     } else {
+         areas.append(rect());
+     }
