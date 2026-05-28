@@ -1,31 +1,31 @@
-# Flameshot - GNOME Wayland 跨屏截图增强版
+# Flameshot - Cross-Monitor Screenshot for GNOME Wayland
 
-基于 [Flameshot v14.0.0](https://github.com/flameshot-org/flameshot) 修改，解决在 GNOME Wayland 双屏环境下无法跨屏截图的问题。
+Patched version of [Flameshot v14.0.0](https://github.com/flameshot-org/flameshot) that enables cross-monitor screenshot selection under GNOME Wayland with dual/multi monitors.
 
-## 问题
+## The Problem
 
-在 GNOME Wayland 双屏（或多屏）环境下，Flameshot 截图时：
+On GNOME Wayland with dual or multiple monitors, Flameshot:
 
-1. 只能在**单个显示器**上显示选区，无法跨屏框选
-2. 需要先选择显示器，操作繁琐
-3. 微信截图可以跨屏选区，Flameshot 原版不行
+1. Only shows the selection overlay on a **single monitor** — no cross-monitor selection
+2. Requires you to select a monitor first
+3. WeChat's screenshot tool handles this correctly, but stock Flameshot doesn't
 
-原因：Wayland 协议不允许窗口跨显示器，但 XWayland 可以。
+**Root cause**: The Wayland protocol doesn't allow windows to span across displays, but XWayland does.
 
-## 改动
+## Changes
 
-仅修改了 `src/widgets/capture/capturewidget.cpp`，共三处改动：
+Only `src/widgets/capture/capturewidget.cpp` was modified. Three changes total:
 
-### 1. 截取全桌面（不选择显示器）
+### 1. Capture all monitors at once
 
 ```diff
 - m_context.screenshot = grabber.grabEntireDesktop(ok, preSelectedMonitor);
 + m_context.screenshot = grabber.grabFullDesktop(ok);
 ```
 
-使用 `grabFullDesktop` 替代 `grabEntireDesktop`，一次性截取所有显示器的画面。
+Uses `grabFullDesktop` instead of `grabEntireDesktop` to capture the full desktop in one pass.
 
-### 2. 窗口覆盖全桌面
+### 2. Span window across all monitors
 
 ```diff
 - QRect screenGeom = selectedScreen->geometry();
@@ -39,9 +39,9 @@
 + resize(totalGeom.size());
 ```
 
-窗口大小覆盖所有显示器，而非仅限单个屏幕。
+The overlay window covers the entire desktop instead of a single screen.
 
-### 3. 选区覆盖全桌面
+### 3. Selection area covers all monitors
 
 ```diff
 - QRect r = screenForAreas ? screenForAreas->geometry() : QRect();
@@ -55,11 +55,11 @@
 + areas.append(totalArea);
 ```
 
-选区范围覆盖全桌面，允许跨屏框选。
+The selection area spans the full desktop, enabling cross-monitor selection.
 
-## 编译安装
+## Build & Install
 
-### 依赖
+### Dependencies
 
 ```bash
 # Ubuntu/Debian
@@ -69,32 +69,35 @@ sudo apt install build-essential cmake extra-cmake-modules \
     libkf5dbusaddons-dev libkf5windowsystem-dev
 ```
 
-### 编译
+### Build
+
+Clone the upstream repo and apply the patch:
 
 ```bash
+git clone https://github.com/flameshot-org/flameshot.git
 cd flameshot
+git checkout 090033f  # v14.0.0
+git apply cross-monitor.patch
 mkdir -p build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 ```
 
-### 安装
+### Install
 
 ```bash
 sudo make install
 ```
 
-这会将修改版 flameshot 安装到 `/usr/bin/flameshot`，覆盖系统包版本。原版会备份为 `/usr/bin/flameshot.bak`。
+This installs the patched Flameshot to `/usr/bin/flameshot`, replacing the system package version. The original binary is backed up as `/usr/bin/flameshot.bak`.
 
-> **注意**：系统更新 flameshot 包后需要重新编译安装。
+> **Note**: You need to rebuild after system updates that upgrade the flameshot package.
 
-## 使用
+## Usage
 
-### 快捷键绑定
+### XWayland Wrapper
 
-截图时需要强制使用 XWayland 模式（`QT_QPA_PLATFORM=xcb`），否则 Wayland 下窗口仍然无法跨屏。
-
-创建 wrapper 脚本 `/usr/local/bin/flameshot-xcb`：
+Flameshot must run under XWayland (`QT_QPA_PLATFORM=xcb`) for cross-monitor selection to work. Create a wrapper script at `/usr/local/bin/flameshot-xcb`:
 
 ```bash
 #!/bin/bash
@@ -106,23 +109,31 @@ exec flameshot gui
 sudo chmod +x /usr/local/bin/flameshot-xcb
 ```
 
-### GNOME 快捷键设置
+### GNOME Keyboard Shortcut
 
 ```bash
-# 添加自定义快捷键（例如 Alt+A）
+# Add custom shortcut (e.g. Alt+A)
 gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ name 'Flameshot'
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command '/usr/local/bin/flameshot-xcb'
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ binding '<Alt>a'
 ```
 
-按下快捷键后，截图覆盖层会横跨所有显示器，可以自由跨屏框选。
+Press the shortcut and the screenshot overlay will span all monitors, allowing free cross-monitor selection.
 
-## 来源
+## Files
 
-- 上游仓库：[flameshot-org/flameshot](https://github.com/flameshot-org/flameshot)
-- 基于版本：v14.0.0 (commit `090033f`)
+| File | Description |
+|------|-------------|
+| `capturewidget.cpp` | Modified source file (drop-in replacement) |
+| `cross-monitor.patch` | Patch against upstream v14.0.0 (commit `090033f`) |
+| `flameshot-xcb` | XWayland wrapper script |
+
+## Source
+
+- Upstream: [flameshot-org/flameshot](https://github.com/flameshot-org/flameshot)
+- Based on: v14.0.0 (commit `090033f`)
 
 ## License
 
-GPL-3.0（与上游一致）
+GPL-3.0 (same as upstream)
