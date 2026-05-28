@@ -129,6 +129,8 @@ Press the shortcut and the screenshot overlay will span all monitors, allowing f
 | `cross-monitor.patch` | Patch against upstream v14.0.0 (commit `090033f`) |
 | `flameshot-xcb` | XWayland wrapper script |
 
+[中文文档](README.zh.md)
+
 ## Source
 
 - Upstream: [flameshot-org/flameshot](https://github.com/flameshot-org/flameshot)
